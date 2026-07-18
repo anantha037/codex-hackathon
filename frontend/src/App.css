@@ -170,6 +170,10 @@ h2 {
   font-size: 1.1rem;
 }
 
+.tts-indicator.is-speaking span {
+  color: var(--metro-teal);
+}
+
 .route-form {
   display: grid;
   gap: 18px;
@@ -209,6 +213,12 @@ select {
 .primary-button:hover {
   background: var(--ink);
   border-color: var(--ink);
+}
+
+.primary-button:disabled {
+  background: var(--slate);
+  border-color: var(--slate);
+  cursor: wait;
 }
 
 .primary-button span {
@@ -303,7 +313,7 @@ select {
   width: 20px;
 }
 
-.diagram-station.outage .station-dot {
+.diagram-station.alternate-station .station-dot {
   background: var(--signal-amber);
   border-color: var(--ink);
 }
@@ -332,12 +342,43 @@ select {
   margin-top: 5px;
 }
 
-.outage-label {
+.alternate-label {
   color: var(--ink);
   display: block;
   font-size: 0.65rem;
   font-weight: 800;
   margin-top: 5px;
+}
+
+.error-message,
+.route-result {
+  border-left: 6px solid var(--metro-teal);
+  margin: 34px 0 0;
+  max-width: 760px;
+  padding: 18px 22px;
+}
+
+.error-message {
+  background: #fff3da;
+  border-color: var(--signal-amber);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.route-result {
+  background: #edf5f4;
+}
+
+.route-result > p:not(.eyebrow) {
+  margin: 14px 0 0;
+}
+
+.elevator-details {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
 }
 
 button:focus-visible,
