@@ -32,6 +32,14 @@ function stationsInTranscript(transcript) {
     .map((match) => match.station)
 }
 
+function stationsInJourney(startStation, endStation) {
+  const startIndex = STATIONS.indexOf(startStation)
+  const endIndex = STATIONS.indexOf(endStation)
+  if (startIndex < 0 || endIndex < 0) return []
+
+  return STATIONS.slice(Math.min(startIndex, endIndex), Math.max(startIndex, endIndex) + 1)
+}
+
 function profileFromTranscript(transcript) {
   const text = transcript.toLowerCase()
   if (text.includes('visual') || text.includes('blind')) return 'visually_impaired'
@@ -131,6 +139,9 @@ function App() {
   const profileRecognitionRef = useRef(null)
   const alertPulseTimerRef = useRef(null)
   const qrCanvasRef = useRef(null)
+  const journeyStations = lastPlan
+    ? stationsInJourney(lastPlan.start_station, lastPlan.end_station)
+    : []
 
   useEffect(() => () => {
     window.speechSynthesis?.cancel()
@@ -409,7 +420,13 @@ function App() {
           speakRoute(lastExplanationRef.current, () => startListening('command'))
           return
         }
-        const spokenStations = stationsInTranscript(transcript)
+        const activeJourneyStations = stationsInJourney(
+          lastPlanRef.current?.start_station,
+          lastPlanRef.current?.end_station,
+        )
+        const spokenStations = stationsInTranscript(transcript).filter((station) =>
+          activeJourneyStations.includes(station),
+        )
         const isCurrentStationUpdate = command.includes("i'm at") || command.includes('i am at') || spokenStations.length === 1
         if (bookingStage === 'booked' && journeyStatus && isCurrentStationUpdate && spokenStations.length) {
           const currentStationUpdate = spokenStations[0]
@@ -757,7 +774,7 @@ function App() {
                             requestJourneyStatus(event.target.value)
                           }}
                         >
-                          {STATIONS.map((station) => <option key={station}>{station}</option>)}
+                          {journeyStations.map((station) => <option key={station}>{station}</option>)}
                         </select>
                         {journeyStatus && (
                           <p className="journey-update">
