@@ -93,6 +93,7 @@ function App() {
   const [bookingStage, setBookingStage] = useState('')
   const [currentStation, setCurrentStation] = useState('')
   const [journeyStatus, setJourneyStatus] = useState(null)
+  const [alertBannerPulse, setAlertBannerPulse] = useState(false)
   const [isActioning, setIsActioning] = useState(false)
   const [isProfileListening, setIsProfileListening] = useState(false)
   const [profileVoiceMessage, setProfileVoiceMessage] = useState('')
@@ -105,6 +106,7 @@ function App() {
   const lastExplanationRef = useRef('')
   const bookingTimerRef = useRef(null)
   const profileRecognitionRef = useRef(null)
+  const alertPulseTimerRef = useRef(null)
 
   useEffect(() => () => {
     window.speechSynthesis?.cancel()
@@ -112,6 +114,7 @@ function App() {
     profileRecognitionRef.current?.abort()
     window.clearTimeout(restartTimerRef.current)
     window.clearTimeout(bookingTimerRef.current)
+    window.clearTimeout(alertPulseTimerRef.current)
   }, [])
 
   useEffect(() => {
@@ -239,7 +242,20 @@ function App() {
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Unable to update journey status.')
       setJourneyStatus(result)
-      if (plan.profile === 'visually_impaired') speakRoute(result.speech_text)
+      if (plan.profile === 'deaf_hoh_mute') {
+        navigator.vibrate?.([200, 100, 200])
+        setAlertBannerPulse(true)
+        window.clearTimeout(alertPulseTimerRef.current)
+        alertPulseTimerRef.current = window.setTimeout(() => setAlertBannerPulse(false), 600)
+      }
+      if (plan.profile === 'visually_impaired') {
+        if (result.next_station) {
+          const nextAfterThat = result.route?.[2] || 'your destination'
+          speakRoute(`Approaching ${result.next_station}. Next stop after that: ${nextAfterThat}.`)
+        } else {
+          speakRoute('You have reached your destination.')
+        }
+      }
     } catch (error) {
       setErrorMessage(error.message || 'Unable to update journey status.')
     }
@@ -500,9 +516,9 @@ function App() {
       </header>
 
       {isDeaf && (
-        <aside className="alert-banner" role="status">
+        <aside className={`alert-banner ${alertBannerPulse ? 'is-pulsing' : ''}`} role="status">
           <strong>Service alerts</strong>
-          <span>{routeResult?.visual_alert || 'No active alerts. Live disruptions will appear here.'}</span>
+          <span>{journeyStatus?.visual_alert || routeResult?.visual_alert || 'No active alerts. Live disruptions will appear here.'}</span>
         </aside>
       )}
 

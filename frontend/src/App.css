@@ -170,6 +170,21 @@ h2 {
   font-weight: 800;
 }
 
+.alert-banner.is-pulsing {
+  animation: alert-pulse 600ms ease-in-out 1;
+}
+
+@keyframes alert-pulse {
+  0%,
+  100% {
+    background: var(--ink);
+  }
+
+  50% {
+    background: var(--metro-teal);
+  }
+}
+
 .route-workspace {
   align-items: end;
   border-bottom: 2px solid var(--ink);
@@ -646,6 +661,7 @@ select:focus-visible {
   *,
   *::before,
   *::after {
+    animation: none !important;
     scroll-behavior: auto !important;
   }
 }
