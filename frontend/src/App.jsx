@@ -39,15 +39,30 @@ function profileFromTranscript(transcript) {
   return null
 }
 
-function MetroLineDiagram({ startStation, endStation, showElevators = false, alternate, outageStation }) {
+function MetroLineDiagram({
+  startStation,
+  endStation,
+  showElevators = false,
+  alternate,
+  outageStation,
+  autoScroll = false,
+  scrollKey,
+}) {
   const startIndex = STATIONS.indexOf(startStation)
   const endIndex = STATIONS.indexOf(endStation)
   const routeStart = Math.min(startIndex, endIndex)
   const routeEnd = Math.max(startIndex, endIndex)
+  const scrollRef = useRef(null)
+
+  useEffect(() => {
+    if (autoScroll && startIndex >= 0) {
+      scrollRef.current?.scrollTo({ left: startIndex * 128, behavior: 'auto' })
+    }
+  }, [autoScroll, startIndex, scrollKey])
 
   return (
     <section className="line-diagram" aria-label="Kochi Metro Aluva to Thripunithura line">
-      <div className="line-diagram-scroll">
+      <div className="line-diagram-scroll" ref={scrollRef}>
         <ol className="station-list">
           {STATIONS.map((station, index) => {
             const isEndpoint = station === startStation || station === endStation
@@ -58,6 +73,7 @@ function MetroLineDiagram({ startStation, endStation, showElevators = false, alt
               'diagram-station',
               isInRoute && 'in-route',
               isEndpoint && 'route-endpoint',
+              index % 2 === 0 ? 'label-above' : 'label-below',
               isAlternate && 'alternate-station',
               isOutage && 'outage-station',
             ].filter(Boolean).join(' ')
@@ -66,8 +82,10 @@ function MetroLineDiagram({ startStation, endStation, showElevators = false, alt
               <li className={classes} key={station}>
                 <span className="station-dot" aria-hidden="true" />
                 {showElevators && <span className="elevator-icon" aria-label={`${station} elevator available`}>↕</span>}
-                <span className="station-name">{station}</span>
-                <span className="station-code">KM{String(index + 1).padStart(2, '0')}</span>
+                <span className="station-label">
+                  <span className="station-name">{station}</span>
+                  <span className="station-code">KM{String(index + 1).padStart(2, '0')}</span>
+                </span>
                 {isAlternate && <span className="alternate-label">Accessible alternative</span>}
                 {isOutage && <span className="outage-label">Elevator outage</span>}
               </li>
@@ -728,10 +746,12 @@ function App() {
           <p className="diagram-key"><span aria-hidden="true" /> Selected journey</p>
         </div>
         <MetroLineDiagram
+          autoScroll={Boolean(routeResult)}
           alternate={alternateStation(routeResult)}
           endStation={diagramEnd}
           outageStation={activeOutage}
           showElevators={isWheelchair}
+          scrollKey={routeResult}
           startStation={diagramStart}
         />
       </section>

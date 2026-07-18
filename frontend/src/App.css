@@ -331,20 +331,20 @@ select {
 
 .line-diagram-scroll {
   overflow-x: auto;
-  padding: 12px 0 52px;
+  padding: 12px 0 20px;
 }
 
 .station-list {
   display: grid;
-  grid-template-columns: repeat(25, minmax(78px, 1fr));
+  grid-template-columns: repeat(25, minmax(128px, 1fr));
   list-style: none;
   margin: 0;
-  min-width: 1950px;
+  min-width: 3200px;
   padding: 0;
 }
 
 .diagram-station {
-  min-height: 145px;
+  min-height: 250px;
   position: relative;
   text-align: center;
 }
@@ -355,23 +355,24 @@ select {
   height: 2px;
   left: 50%;
   position: absolute;
-  top: 18px;
+  top: 120px;
   width: 100%;
 }
 
 .diagram-station.in-route:not(:last-child)::after {
   background: var(--metro-teal);
   height: 4px;
-  top: 17px;
+  top: 119px;
 }
 
 .station-dot {
   background: var(--paper);
   border: 3px solid var(--slate);
   border-radius: 50%;
-  display: inline-block;
   height: 16px;
-  position: relative;
+  left: calc(50% - 8px);
+  position: absolute;
+  top: 112px;
   width: 16px;
   z-index: 1;
 }
@@ -385,7 +386,8 @@ select {
   background: var(--paper);
   border: 5px solid var(--metro-teal);
   height: 20px;
-  margin-top: -2px;
+  left: calc(50% - 10px);
+  top: 110px;
   width: 20px;
 }
 
@@ -394,13 +396,28 @@ select {
   border-color: var(--ink);
 }
 
+.station-label {
+  display: grid;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%);
+  width: 116px;
+}
+
+.label-above .station-label {
+  bottom: 143px;
+}
+
+.label-below .station-label {
+  top: 143px;
+}
+
 .station-name {
   display: block;
   font-size: 0.75rem;
   font-weight: 800;
   line-height: 1.15;
-  margin: 13px auto 5px;
-  max-width: 74px;
+  overflow-wrap: anywhere;
 }
 
 .station-code {
@@ -411,11 +428,11 @@ select {
 
 .elevator-icon {
   color: var(--metro-teal);
-  display: block;
   font-size: 1.2rem;
   font-weight: 900;
-  height: 20px;
-  margin-top: 5px;
+  left: calc(50% + 14px);
+  position: absolute;
+  top: 108px;
 }
 
 .alternate-label {
@@ -423,7 +440,10 @@ select {
   display: block;
   font-size: 0.65rem;
   font-weight: 800;
-  margin-top: 5px;
+  left: 6px;
+  position: absolute;
+  top: 220px;
+  width: calc(100% - 12px);
 }
 
 .diagram-station.outage-station .station-dot {
@@ -436,7 +456,10 @@ select {
   display: block;
   font-size: 0.65rem;
   font-weight: 800;
-  margin-top: 5px;
+  left: 6px;
+  position: absolute;
+  top: 220px;
+  width: calc(100% - 12px);
 }
 
 .error-message,
