@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from llm import generate_explanation
 from routing import get_accessible_route, get_direct_route, set_elevator_status
 from stations import STATIONS
 
@@ -59,8 +60,15 @@ def route_for_profile(start_station: str, end_station: str, profile: str) -> dic
         route_details["accessible_route"] = []
         route_details["elevator_details"] = []
 
-    route_details["speech_text"] = "Route has been planned."
+    explanation = generate_explanation(route_details, profile)
+    route_details["speech_text"] = ""
     route_details["visual_alert"] = ""
+    if profile == "visually_impaired":
+        route_details["speech_text"] = explanation
+    elif profile == "deaf_hoh_mute":
+        route_details["visual_alert"] = explanation
+    else:
+        route_details["explanation"] = explanation
     return route_details
 
 
