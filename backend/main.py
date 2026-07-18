@@ -1,6 +1,6 @@
 """FastAPI application skeleton for the Kochi Metro demo."""
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -63,16 +63,19 @@ def elevator_details_for(station_names: tuple[str, str]) -> list[dict]:
 
 
 def route_for_profile(start_station: str, end_station: str, profile: str) -> dict:
-    if profile == "wheelchair":
-        route_details = get_accessible_route(start_station, end_station)
-        route_details["accessible_route"] = route_details["route"]
-        route_details["elevator_details"] = elevator_details_for(
-            (start_station, end_station)
-        )
-    else:
-        route_details = get_direct_route(start_station, end_station)
-        route_details["accessible_route"] = []
-        route_details["elevator_details"] = []
+    try:
+        if profile == "wheelchair":
+            route_details = get_accessible_route(start_station, end_station)
+            route_details["accessible_route"] = route_details["route"]
+            route_details["elevator_details"] = elevator_details_for(
+                (start_station, end_station)
+            )
+        else:
+            route_details = get_direct_route(start_station, end_station)
+            route_details["accessible_route"] = []
+            route_details["elevator_details"] = []
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
     route_details["boarding_assistance"] = elevator_details_for(
         (start_station, end_station)
@@ -100,7 +103,10 @@ def plan_route(request: PlanRouteRequest):
 
 @app.post("/simulate-outage", response_model=None)
 def simulate_outage(request: SimulateOutageRequest):
-    station = set_elevator_status(request.station_name, "Under Maintenance")
+    try:
+        station = set_elevator_status(request.station_name, "Under Maintenance")
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     return {
         **station,
         "speech_text": "Elevator outage has been recorded.",
@@ -129,7 +135,10 @@ def journey_status(
     current_station: str,
     profile: str,
 ):
-    status = get_journey_status(start_station, end_station, current_station)
+    try:
+        status = get_journey_status(start_station, end_station, current_station)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
     explanation_input = {
         "route": [current_station, status["next_station"]]
         if status["next_station"]

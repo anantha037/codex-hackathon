@@ -3,6 +3,10 @@
 from stations import STATIONS
 
 
+class JourneyStatusError(ValueError):
+    """Raised when progress is requested for a station outside a journey."""
+
+
 def _station_index(station_name: str) -> int:
     for index, station in enumerate(STATIONS):
         if station["name"] == station_name:
@@ -100,7 +104,7 @@ def get_journey_status(
     journey_start = min(start_index, end_index)
     journey_end = max(start_index, end_index)
     if not journey_start <= current_index <= journey_end:
-        raise ValueError("Current station is outside the selected journey")
+        raise JourneyStatusError("Current station is outside the selected journey")
 
     remaining_route = get_direct_route(current_station, end_station)
     stations_remaining = max(remaining_route["station_count"] - 1, 0)
