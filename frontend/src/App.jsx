@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 const API_URL = 'http://localhost:8000'
@@ -19,6 +19,15 @@ const PROFILES = [
 
 function alternateStation(routeResult) {
   return routeResult?.suggested_alternate?.replacements?.[0]?.alternate_station
+}
+
+function stationsInTranscript(transcript) {
+  const normalized = transcript.toLowerCase()
+  return STATIONS
+    .map((station) => ({ station, index: normalized.indexOf(station.toLowerCase()) }))
+    .filter((match) => match.index >= 0)
+    .sort((first, second) => first.index - second.index)
+    .map((match) => match.station)
 }
 
 function MetroLineDiagram({ startStation, endStation, showElevators = false, alternate, outageStation }) {
@@ -74,21 +83,165 @@ function App() {
   const [activeOutage, setActiveOutage] = useState(null)
   const [booking, setBooking] = useState(null)
   const [isActioning, setIsActioning] = useState(false)
+  const [isListening, setIsListening] = useState(false)
+  const [speechRecognitionSupported, setSpeechRecognitionSupported] = useState(true)
+  const [voiceStatus, setVoiceStatus] = useState('')
+  const recognitionRef = useRef(null)
+  const restartTimerRef = useRef(null)
+  const lastPlanRef = useRef(null)
+  const lastExplanationRef = useRef('')
 
-  useEffect(() => () => window.speechSynthesis?.cancel(), [])
+  useEffect(() => () => {
+    window.speechSynthesis?.cancel()
+    recognitionRef.current?.abort()
+    window.clearTimeout(restartTimerRef.current)
+  }, [])
 
-  function speakRoute(text) {
-    if (!text || !window.speechSynthesis) return
+  useEffect(() => {
+    lastPlanRef.current = lastPlan
+  }, [lastPlan])
+
+  useEffect(() => {
+    if (profile !== 'visually_impaired') return undefined
+
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    setSpeechRecognitionSupported(Boolean(Recognition))
+    speakRoute('Say your starting station, then your destination. For example: Aluva to Thripunithura.')
+
+    return () => {
+      recognitionRef.current?.abort()
+      window.clearTimeout(restartTimerRef.current)
+      setIsListening(false)
+    }
+  }, [profile])
+
+  function speakRoute(text, onComplete) {
+    if (!text || !window.speechSynthesis) {
+      onComplete?.()
+      return
+    }
 
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text)
-    utterance.onend = () => setIsSpeaking(false)
-    utterance.onerror = () => setIsSpeaking(false)
+    utterance.onend = () => {
+      setIsSpeaking(false)
+      onComplete?.()
+    }
+    utterance.onerror = () => {
+      setIsSpeaking(false)
+      onComplete?.()
+    }
     setIsSpeaking(true)
     window.speechSynthesis.speak(utterance)
   }
 
-  async function requestRoute(endpoint, routeRequest) {
+  function retryListening(mode, message) {
+    speakRoute(message, () => {
+      restartTimerRef.current = window.setTimeout(() => startListening(mode), 700)
+    })
+  }
+
+  async function bookWithVoice() {
+    const plan = lastPlanRef.current
+    if (!plan) return
+
+    try {
+      const date = new Date().toISOString().slice(0, 10)
+      const bookingResponse = await fetch(`${API_URL}/book-ticket`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...plan, date }),
+      })
+      const bookingResult = await bookingResponse.json()
+      if (!bookingResponse.ok) throw new Error('Unable to create a ticket.')
+
+      setBooking(bookingResult)
+      const parameters = new URLSearchParams({
+        start_station: plan.start_station,
+        end_station: plan.end_station,
+        date,
+      })
+      const linkResponse = await fetch(`${API_URL}/whatsapp-booking-link?${parameters}`)
+      const linkResult = await linkResponse.json()
+      if (linkResponse.ok) window.open(linkResult.whatsapp_link, '_blank', 'noopener,noreferrer')
+      speakRoute(`Your ticket is confirmed. Ticket ID: ${bookingResult.ticket_id}. Opening WhatsApp payment.`)
+    } catch (error) {
+      setErrorMessage(error.message || 'Unable to create a ticket.')
+      speakRoute('Sorry, I could not create your ticket.')
+    }
+  }
+
+  function startListening(mode = 'journey') {
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!Recognition) {
+      setSpeechRecognitionSupported(false)
+      return
+    }
+
+    recognitionRef.current?.abort()
+    const recognition = new Recognition()
+    recognition.continuous = false
+    recognition.interimResults = false
+    recognition.lang = 'en-IN'
+    recognitionRef.current = recognition
+    setIsListening(true)
+    setVoiceStatus(mode === 'journey' ? 'Listening for your journey…' : 'Listening for “book it” or “repeat”…')
+
+    recognition.onresult = async (event) => {
+      const transcript = event.results[0][0].transcript
+      setIsListening(false)
+      setVoiceStatus(`Heard: ${transcript}`)
+
+      if (mode === 'command') {
+        const command = transcript.toLowerCase()
+        if (command.includes('book it')) {
+          await bookWithVoice()
+          return
+        }
+        if (command.includes('repeat')) {
+          speakRoute(lastExplanationRef.current, () => startListening('command'))
+          return
+        }
+        retryListening('command', 'Say book it or repeat.')
+        return
+      }
+
+      const matches = stationsInTranscript(transcript)
+      if (matches.length < 2) {
+        retryListening('journey', "Sorry, I didn't catch both stations. Try again, like Aluva to Thripunithura.")
+        return
+      }
+
+      const routeRequest = {
+        profile: 'visually_impaired',
+        start_station: matches[0],
+        end_station: matches[1],
+      }
+      setStartStation(routeRequest.start_station)
+      setEndStation(routeRequest.end_station)
+      setIsPlanning(true)
+      const result = await requestRoute('/plan-route', routeRequest, true)
+      if (result) setLastPlan(routeRequest)
+      setIsPlanning(false)
+    }
+    recognition.onerror = (event) => {
+      setIsListening(false)
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        setVoiceStatus('Microphone access is unavailable. Use the station dropdowns below.')
+        return
+      }
+      retryListening(mode, "Sorry, I didn't catch that. Try again.")
+    }
+    recognition.onend = () => setIsListening(false)
+    try {
+      recognition.start()
+    } catch {
+      setIsListening(false)
+      setVoiceStatus('Voice recognition is unavailable. Use the station dropdowns below.')
+    }
+  }
+
+  async function requestRoute(endpoint, routeRequest, listenForCommands = false) {
     try {
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
@@ -99,7 +252,10 @@ function App() {
       if (!response.ok) throw new Error(result.detail || 'Unable to plan this route.')
 
       setRouteResult(result)
-      if (routeRequest.profile === 'visually_impaired') speakRoute(result.speech_text)
+      if (routeRequest.profile === 'visually_impaired') {
+        lastExplanationRef.current = result.speech_text
+        speakRoute(result.speech_text, listenForCommands ? () => startListening('command') : undefined)
+      }
       return result
     } catch (error) {
       setErrorMessage(error.message || 'Unable to reach the route planning service.')
@@ -119,7 +275,7 @@ function App() {
     setIsPlanning(true)
     setBooking(null)
     setActiveOutage(null)
-    const result = await requestRoute('/plan-route', routeRequest)
+    const result = await requestRoute('/plan-route', routeRequest, profile === 'visually_impaired')
     if (result) setLastPlan(routeRequest)
     setIsPlanning(false)
   }
@@ -243,7 +399,21 @@ function App() {
         <div className="route-intro">
           <p className="eyebrow">Plan a journey</p>
           <h1 id="route-heading">Where are you going?</h1>
-          {isVisuallyImpaired && <p className={`tts-indicator ${isSpeaking ? 'is-speaking' : ''}`}><span aria-hidden="true">●</span> {isSpeaking ? 'Speaking route guidance' : 'Speech guidance ready'}</p>}
+          {isVisuallyImpaired && (
+            <>
+              <p className={`tts-indicator ${isSpeaking ? 'is-speaking' : ''}`}><span aria-hidden="true">●</span> {isSpeaking ? 'Speaking route guidance' : 'Speech guidance ready'}</p>
+              {speechRecognitionSupported ? (
+                <div className="voice-primary">
+                  <button aria-label="Tap and speak your journey" className="voice-button" onClick={() => startListening('journey')} type="button">
+                    {isListening ? 'Listening…' : 'Tap and speak your journey'}
+                  </button>
+                  <p aria-live="polite">{voiceStatus || 'Say your starting station, then your destination.'}</p>
+                </div>
+              ) : (
+                <p className="voice-fallback" role="status">Voice recognition is not supported in this browser. Use the station dropdowns to plan your route.</p>
+              )}
+            </>
+          )}
         </div>
 
         <form className="route-form" onSubmit={handlePlanRoute}>
