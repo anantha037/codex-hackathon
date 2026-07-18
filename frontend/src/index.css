@@ -1,0 +1,32 @@
+:root {
+  --ink: #10181A;
+  --paper: #F7F5F0;
+  --metro-teal: #0E6E6E;
+  --signal-amber: #F0A202;
+  --slate: #5B6B6B;
+  --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  color: var(--ink);
+  background: var(--paper);
+  font: 18px/1.45 var(--sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+select {
+  font: inherit;
+}
+
+#root {
+  min-height: 100svh;
+}
