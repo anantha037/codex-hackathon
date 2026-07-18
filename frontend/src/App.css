@@ -512,6 +512,23 @@ select {
   font-size: 0.76rem;
 }
 
+.booking-progress {
+  border-left: 5px solid var(--signal-amber);
+  margin-top: 18px;
+  min-height: 58px;
+  padding: 12px 0 12px 14px;
+}
+
+.booking-progress.confirming,
+.booking-progress.booked {
+  border-color: var(--metro-teal);
+}
+
+.booking-progress > p {
+  font-weight: 800;
+  margin: 0;
+}
+
 button:focus-visible,
 select:focus-visible {
   outline: 4px solid var(--signal-amber);

@@ -82,6 +82,7 @@ function App() {
   const [outageStation, setOutageStation] = useState(STATIONS[0])
   const [activeOutage, setActiveOutage] = useState(null)
   const [booking, setBooking] = useState(null)
+  const [bookingStage, setBookingStage] = useState('')
   const [isActioning, setIsActioning] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [speechRecognitionSupported, setSpeechRecognitionSupported] = useState(true)
@@ -90,11 +91,13 @@ function App() {
   const restartTimerRef = useRef(null)
   const lastPlanRef = useRef(null)
   const lastExplanationRef = useRef('')
+  const bookingTimerRef = useRef(null)
 
   useEffect(() => () => {
     window.speechSynthesis?.cancel()
     recognitionRef.current?.abort()
     window.clearTimeout(restartTimerRef.current)
+    window.clearTimeout(bookingTimerRef.current)
   }, [])
 
   useEffect(() => {
@@ -141,12 +144,33 @@ function App() {
     })
   }
 
+  function startBookingProcess() {
+    window.clearTimeout(bookingTimerRef.current)
+    setBooking(null)
+    setBookingStage('checking')
+    if (profile === 'visually_impaired') speakRoute('Booking your ticket now.')
+  }
+
+  function revealBooking(bookingResult) {
+    bookingTimerRef.current = window.setTimeout(() => {
+      setBookingStage('confirming')
+      bookingTimerRef.current = window.setTimeout(() => {
+        setBooking(bookingResult)
+        setBookingStage('booked')
+        if (profile === 'visually_impaired') {
+          speakRoute(`Booking confirmed, your ticket ID is ${bookingResult.ticket_id}.`)
+        }
+      }, 400)
+    }, 350)
+  }
+
   async function bookWithVoice() {
     const plan = lastPlanRef.current
     if (!plan) return
 
     try {
       const date = new Date().toISOString().slice(0, 10)
+      startBookingProcess()
       const bookingResponse = await fetch(`${API_URL}/book-ticket`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -155,7 +179,7 @@ function App() {
       const bookingResult = await bookingResponse.json()
       if (!bookingResponse.ok) throw new Error('Unable to create a ticket.')
 
-      setBooking(bookingResult)
+      revealBooking(bookingResult)
       const parameters = new URLSearchParams({
         start_station: plan.start_station,
         end_station: plan.end_station,
@@ -164,9 +188,9 @@ function App() {
       const linkResponse = await fetch(`${API_URL}/whatsapp-booking-link?${parameters}`)
       const linkResult = await linkResponse.json()
       if (linkResponse.ok) window.open(linkResult.whatsapp_link, '_blank', 'noopener,noreferrer')
-      speakRoute(`Your ticket is confirmed. Ticket ID: ${bookingResult.ticket_id}. Opening WhatsApp payment.`)
     } catch (error) {
       setErrorMessage(error.message || 'Unable to create a ticket.')
+      setBookingStage('')
       speakRoute('Sorry, I could not create your ticket.')
     }
   }
@@ -306,6 +330,7 @@ function App() {
     if (!lastPlan) return
     setErrorMessage('')
     setIsActioning(true)
+    startBookingProcess()
     try {
       const response = await fetch(`${API_URL}/book-ticket`, {
         method: 'POST',
@@ -318,9 +343,10 @@ function App() {
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Unable to create a ticket.')
-      setBooking(result)
+      revealBooking(result)
     } catch (error) {
       setErrorMessage(error.message || 'Unable to create a ticket.')
+      setBookingStage('')
     } finally {
       setIsActioning(false)
     }
@@ -476,7 +502,18 @@ function App() {
                 <button className="outline-button" disabled={isActioning} onClick={handleBooking} type="button">Book Ticket</button>
                 <button className="text-action" disabled={isActioning} onClick={handleWhatsApp} type="button">Pay via WhatsApp ↗</button>
               </div>
-              {booking && <p className="ticket-confirmation"><strong>Confirmed: {booking.ticket_id}</strong><br /><code>{booking.qr_payload}</code></p>}
+              {bookingStage && (
+                <div className={`booking-progress ${bookingStage}`} aria-live="polite">
+                  <p>{bookingStage === 'checking' && 'Checking route...'}</p>
+                  <p>{bookingStage === 'confirming' && 'Confirming booking...'}</p>
+                  {bookingStage === 'booked' && booking && (
+                    <>
+                      <p><strong>Booked</strong></p>
+                      <p className="ticket-confirmation"><strong>Ticket ID: {booking.ticket_id}</strong><br /><code>{booking.qr_payload}</code></p>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </section>
         </>
