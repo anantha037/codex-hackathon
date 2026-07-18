@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from booking import build_whatsapp_link, create_booking
 from llm import generate_explanation
 from routing import get_accessible_route, get_direct_route, set_elevator_status
 from stations import STATIONS
@@ -98,12 +99,23 @@ def replan(request: ReplanRequest):
     )
 
 
-@app.post("/book-ticket", response_model=BookTicketResponse)
-def book_ticket(_: BookTicketRequest):
-    return not_implemented_response()
+@app.post("/book-ticket", response_model=None)
+def book_ticket(request: BookTicketRequest):
+    return {
+        **create_booking(request.start_station, request.end_station, request.date),
+        "speech_text": "",
+        "visual_alert": "",
+        "accessible_route": [],
+        "elevator_details": [],
+    }
 
 
-@app.get("/whatsapp-booking-link", response_model=WhatsAppBookingLinkResponse)
+@app.get("/whatsapp-booking-link", response_model=None)
 def whatsapp_booking_link(start_station: str, end_station: str, date: str):
-    del start_station, end_station, date
-    return not_implemented_response()
+    return {
+        "whatsapp_link": build_whatsapp_link(start_station, end_station, date),
+        "speech_text": "",
+        "visual_alert": "",
+        "accessible_route": [],
+        "elevator_details": [],
+    }
