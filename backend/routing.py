@@ -10,6 +10,13 @@ def _station_index(station_name: str) -> int:
     raise ValueError(f"Unknown station: {station_name}")
 
 
+def set_elevator_status(station_name: str, status: str) -> dict:
+    """Update and return a station's in-memory elevator data."""
+    station = STATIONS[_station_index(station_name)]
+    station["elevator_status"] = status
+    return station
+
+
 def _nearest_working_elevator(station_index: int) -> tuple[int, dict]:
     for distance in range(1, len(STATIONS)):
         for candidate_index in (station_index - distance, station_index + distance):

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from routing import get_accessible_route, get_direct_route
+from routing import get_accessible_route, get_direct_route, set_elevator_status
 from stations import STATIONS
 
 from models import (
@@ -47,18 +47,15 @@ def elevator_details_for(station_names: tuple[str, str]) -> list[dict]:
     ]
 
 
-@app.post("/plan-route", response_model=None)
-def plan_route(request: PlanRouteRequest):
-    if request.profile == "wheelchair":
-        route_details = get_accessible_route(
-            request.start_station, request.end_station
-        )
+def route_for_profile(start_station: str, end_station: str, profile: str) -> dict:
+    if profile == "wheelchair":
+        route_details = get_accessible_route(start_station, end_station)
         route_details["accessible_route"] = route_details["route"]
         route_details["elevator_details"] = elevator_details_for(
-            (request.start_station, request.end_station)
+            (start_station, end_station)
         )
     else:
-        route_details = get_direct_route(request.start_station, request.end_station)
+        route_details = get_direct_route(start_station, end_station)
         route_details["accessible_route"] = []
         route_details["elevator_details"] = []
 
@@ -67,14 +64,30 @@ def plan_route(request: PlanRouteRequest):
     return route_details
 
 
-@app.post("/simulate-outage", response_model=SimulateOutageResponse)
-def simulate_outage(_: SimulateOutageRequest):
-    return not_implemented_response()
+@app.post("/plan-route", response_model=None)
+def plan_route(request: PlanRouteRequest):
+    return route_for_profile(
+        request.start_station, request.end_station, request.profile
+    )
 
 
-@app.post("/replan", response_model=ReplanResponse)
-def replan(_: ReplanRequest):
-    return not_implemented_response()
+@app.post("/simulate-outage", response_model=None)
+def simulate_outage(request: SimulateOutageRequest):
+    station = set_elevator_status(request.station_name, "Under Maintenance")
+    return {
+        **station,
+        "speech_text": "Elevator outage has been recorded.",
+        "visual_alert": "Elevator under maintenance.",
+        "accessible_route": [],
+        "elevator_details": [station],
+    }
+
+
+@app.post("/replan", response_model=None)
+def replan(request: ReplanRequest):
+    return route_for_profile(
+        request.start_station, request.end_station, request.profile
+    )
 
 
 @app.post("/book-ticket", response_model=BookTicketResponse)
