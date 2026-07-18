@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import QRCode from 'qrcode'
 import './App.css'
 
 const API_URL = 'http://localhost:8000'
@@ -129,6 +130,7 @@ function App() {
   const bookingTimerRef = useRef(null)
   const profileRecognitionRef = useRef(null)
   const alertPulseTimerRef = useRef(null)
+  const qrCanvasRef = useRef(null)
 
   useEffect(() => () => {
     window.speechSynthesis?.cancel()
@@ -142,6 +144,23 @@ function App() {
   useEffect(() => {
     lastPlanRef.current = lastPlan
   }, [lastPlan])
+
+  useEffect(() => {
+    if (bookingStage !== 'booked' || !booking?.qr_payload || !qrCanvasRef.current) return undefined
+
+    let isCurrent = true
+    QRCode.toCanvas(qrCanvasRef.current, booking.qr_payload, {
+      width: 280,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+    }).catch(() => {
+      if (isCurrent) setErrorMessage('Unable to render the ticket QR code.')
+    })
+
+    return () => {
+      isCurrent = false
+    }
+  }, [booking, bookingStage])
 
   useEffect(() => {
     if (profile) return undefined
@@ -723,7 +742,11 @@ function App() {
                   {bookingStage === 'booked' && booking && (
                     <>
                       <p><strong>Booked</strong></p>
-                      <p className="ticket-confirmation"><strong>Ticket ID: {booking.ticket_id}</strong><br /><code>{booking.qr_payload}</code></p>
+                      <p className="ticket-confirmation"><strong>Ticket ID: {booking.ticket_id}</strong></p>
+                      <figure className="ticket-qr">
+                        <canvas ref={qrCanvasRef} aria-label={`QR code for ticket ${booking.ticket_id}`} role="img" />
+                        <figcaption>Demo ticket — for hackathon presentation</figcaption>
+                      </figure>
                       <div className="journey-tracker">
                         <label htmlFor="current-station">I&apos;m at...</label>
                         <select

@@ -592,9 +592,31 @@ select {
   padding: 12px;
 }
 
-.ticket-confirmation code {
+.ticket-qr {
+  align-items: center;
+  background: #fff;
+  border: 2px solid var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding: 16px;
+  width: min(100%, 328px);
+}
+
+.ticket-qr canvas {
+  display: block;
+  height: auto;
+  image-rendering: pixelated;
+  max-width: 100%;
+  width: 280px;
+}
+
+.ticket-qr figcaption {
   color: var(--slate);
-  font-size: 0.76rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: center;
 }
 
 .booking-progress {
