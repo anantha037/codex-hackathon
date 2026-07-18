@@ -62,6 +62,12 @@ def elevator_details_for(station_names: tuple[str, str]) -> list[dict]:
     ]
 
 
+def validate_station_names(*station_names: str) -> None:
+    known_station_names = {station["name"] for station in STATIONS}
+    if any(station_name not in known_station_names for station_name in station_names):
+        raise HTTPException(status_code=400, detail="Unknown station")
+
+
 def route_for_profile(start_station: str, end_station: str, profile: str) -> dict:
     try:
         if profile == "wheelchair":
@@ -171,6 +177,7 @@ def journey_status(
 
 @app.post("/book-ticket", response_model=None)
 def book_ticket(request: BookTicketRequest):
+    validate_station_names(request.start_station, request.end_station)
     return {
         **create_booking(request.start_station, request.end_station, request.date),
         "speech_text": "",
@@ -182,6 +189,7 @@ def book_ticket(request: BookTicketRequest):
 
 @app.get("/whatsapp-booking-link", response_model=None)
 def whatsapp_booking_link(start_station: str, end_station: str, date: str):
+    validate_station_names(start_station, end_station)
     return {
         "whatsapp_link": build_whatsapp_link(start_station, end_station, date),
         "speech_text": "",
