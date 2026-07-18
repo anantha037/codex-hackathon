@@ -33,6 +33,8 @@ def _alternate_text(alternate: dict | None) -> str:
 def _fallback_explanation(route_result: dict, profile: str) -> str:
     data = _route_data(route_result)
     stations = data["stations"]
+    if not stations:
+        return "I could not identify both stations."
     route_text = " to ".join(stations) if stations else "the selected route"
     count = data["station_count"] or len(stations)
     platform_text = f" Board from {data['platform']}." if data["platform"] else ""
@@ -87,6 +89,8 @@ def _build_prompt(route_result: dict, profile: str) -> str:
 def generate_explanation(route_result: dict, profile: str) -> str:
     """Generate a profile-aware explanation, with a deterministic fallback."""
     fallback = _fallback_explanation(route_result, profile)
+    if not _route_data(route_result)["stations"]:
+        return fallback
 
     try:
         from openai import OpenAI

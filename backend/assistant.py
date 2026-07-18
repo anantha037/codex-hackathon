@@ -3,10 +3,10 @@
 from datetime import date
 import json
 import os
-import re
 
 from booking import build_whatsapp_link, create_booking
 from dotenv import load_dotenv
+from llm import generate_explanation
 from routing import get_accessible_route, get_direct_route
 from stations import STATIONS
 
@@ -65,11 +65,6 @@ TOOLS = [
 ]
 
 
-def _plain_text(text: str) -> str:
-    text = re.sub(r"(?m)^\s*(?:[-+•]|\d+[.)])\s*", "", text)
-    return " ".join(re.sub(r"[*_`#]", "", text).split())
-
-
 def _stations_in_text(user_text: str) -> list[str]:
     normalized = user_text.lower()
     return [
@@ -120,25 +115,33 @@ def _elevator_details(route: dict | None) -> list[dict]:
             "station": station["name"],
             "has_elevator": station["has_elevator"],
             "elevator_status": station["elevator_status"],
+            "boarding_assistance": station["boarding_assistance"],
         }
         for station in STATIONS
         if station["name"] in endpoints
     ]
 
 
-def _response(profile: str, summary: str, tool_results: list[dict]) -> dict:
+def _response(profile: str, tool_results: list[dict]) -> dict:
     route = next(
         (result["result"] for result in tool_results if result["tool"] == "plan_route"),
         None,
     )
+    elevator_details = _elevator_details(route)
+    explanation_input = {
+        **(route or {"route": []}),
+        "elevator_details": elevator_details,
+        "boarding_assistance": elevator_details,
+    }
+    summary = generate_explanation(explanation_input, profile)
     response = {
         "profile": profile,
-        "message": _plain_text(summary),
+        "message": summary,
         "tool_results": tool_results,
         "speech_text": "",
         "visual_alert": "",
         "accessible_route": route["route"] if profile == "wheelchair" and route else [],
-        "elevator_details": _elevator_details(route) if profile == "wheelchair" else [],
+        "elevator_details": elevator_details if profile == "wheelchair" else [],
     }
     if profile == "visually_impaired":
         response["speech_text"] = response["message"]
@@ -152,14 +155,10 @@ def _response(profile: str, summary: str, tool_results: list[dict]) -> dict:
 def _fallback(user_text: str, profile: str) -> dict:
     stations = _stations_in_text(user_text)
     if len(stations) < 2:
-        return _response(profile, "I could not identify both stations.", [])
+        return _response(profile, [])
 
     route = _plan_route(stations[0], stations[1], profile)
-    summary = (
-        f"Route from {stations[0]} to {stations[1]}. "
-        f"{route['station_count']} stations. Board from {route['platform']}."
-    )
-    return _response(profile, summary, [{"tool": "plan_route", "result": route}])
+    return _response(profile, [{"tool": "plan_route", "result": route}])
 
 
 def handle_request(user_text: str, profile: str) -> dict:
@@ -177,9 +176,8 @@ def handle_request(user_text: str, profile: str) -> dict:
                     f"You are an assistant for the {profile} profile. Extract station names only from "
                     f"this list: {[station['name'] for station in STATIONS]}. Today is {today}. "
                     "Use tools for all actions. If booking or WhatsApp is requested, call plan_route "
-                    "first and wait for its result before calling the related action. After tool results, "
-                    "respond with one short plain-text summary for only this profile. Use only tool-result "
-                    "facts. Do not use Markdown, headings, or bullet lists."
+                    "first and wait for its result before calling the related action. When no further tool "
+                    "calls are needed, return a brief completion message."
                 ),
             },
             {"role": "user", "content": user_text},
@@ -197,7 +195,7 @@ def handle_request(user_text: str, profile: str) -> dict:
             if not message.tool_calls:
                 if not tool_results:
                     raise ValueError("Assistant did not select a tool")
-                return _response(profile, message.content or "Request completed.", tool_results)
+                return _response(profile, tool_results)
 
             messages.append(message.model_dump(exclude_none=True))
             for tool_call in message.tool_calls:
