@@ -167,7 +167,7 @@ function App() {
 
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
     setSpeechRecognitionSupported(Boolean(Recognition))
-    speakRoute('Say your starting station, then your destination. For example: Aluva to Thripunithura.')
+    speakRoute('Visually Impaired mode. Say your journey. For example: Aluva to Thripunithura.')
 
     return () => {
       recognitionRef.current?.abort()
