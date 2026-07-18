@@ -3,7 +3,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
+from assistant import handle_request
 from booking import build_whatsapp_link, create_booking
 from llm import generate_explanation
 from routing import get_accessible_route, get_direct_route, set_elevator_status
@@ -30,6 +32,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class AssistantRequest(BaseModel):
+    user_text: str
+    profile: str
 
 
 def not_implemented_response() -> JSONResponse:
@@ -98,6 +105,11 @@ def replan(request: ReplanRequest):
     return route_for_profile(
         request.start_station, request.end_station, request.profile
     )
+
+
+@app.post("/assistant", response_model=None)
+def assistant(request: AssistantRequest):
+    return handle_request(request.user_text, request.profile)
 
 
 @app.post("/book-ticket", response_model=None)
