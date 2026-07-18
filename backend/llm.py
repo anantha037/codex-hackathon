@@ -1,50 +1,73 @@
 """Optional natural-language explanations for already-computed routes."""
 
+import json
 import os
+import re
 
 from dotenv import load_dotenv
 
 
+def _route_data(route_result: dict) -> dict:
+    return {
+        "stations": route_result.get("route", route_result.get("stations", [])),
+        "station_count": route_result.get("station_count"),
+        "suggested_alternate": route_result.get("suggested_alternate"),
+        "elevator_details": route_result.get("elevator_details", []),
+    }
+
+
+def _plain_text(text: str) -> str:
+    text = re.sub(r"(?m)^\s*(?:[-+•]|\d+[.)])\s*", "", text)
+    text = re.sub(r"[*_`#]", "", text)
+    return " ".join(text.split())
+
+
+def _alternate_text(alternate: dict | None) -> str:
+    replacements = alternate.get("replacements", []) if alternate else []
+    names = ", ".join(item["alternate_station"] for item in replacements)
+    return f" Use alternate station: {names}." if names else ""
+
+
 def _fallback_explanation(route_result: dict, profile: str) -> str:
-    stations = route_result.get("route", route_result.get("stations", []))
+    data = _route_data(route_result)
+    stations = data["stations"]
     route_text = " to ".join(stations) if stations else "the selected route"
-    station_count = route_result.get("station_count", len(stations))
-    alternate = route_result.get("suggested_alternate")
-    elevators = route_result.get("elevator_details", [])
+    count = data["station_count"] or len(stations)
     elevator_text = ", ".join(
         f"{item['station']}: {item['elevator_status']}"
-        for item in elevators
+        for item in data["elevator_details"]
         if "station" in item and "elevator_status" in item
     )
+    alternate_text = _alternate_text(data["suggested_alternate"])
 
-    alternate_text = ""
-    if alternate:
-        replacements = alternate.get("replacements", [])
-        names = ", ".join(item["alternate_station"] for item in replacements)
-        alternate_text = f" Use alternate station: {names}."
-
-    if profile == "visually_impaired":
-        return f"Route: {route_text}. {station_count} stations.{alternate_text}"
     if profile == "deaf_hoh_mute":
-        return f"{route_text} - {station_count} stations{alternate_text}"
+        return _plain_text(f"{route_text}. {count} stations.{alternate_text}")
     if profile == "wheelchair":
-        return (
+        return _plain_text(
             f"Wheelchair route: {route_text}. Elevator status: "
-            f"{elevator_text or 'check station elevators'}.{alternate_text}"
+            f"{elevator_text or 'not provided'}.{alternate_text}"
         )
-    return f"Route: {route_text}. {station_count} stations.{alternate_text}"
+    return _plain_text(f"Route: {route_text}. {count} stations.{alternate_text}")
+
+
+def _profile_instruction(profile: str) -> str:
+    if profile == "visually_impaired":
+        return "Write one or two short, clear sentences suitable for text to speech."
+    if profile == "deaf_hoh_mute":
+        return "Write one or two short, high-clarity sentences suitable for a visual alert."
+    if profile == "wheelchair":
+        return "Write one or two short descriptive sentences and include any provided elevator status."
+    return "Write one or two short plain-language sentences."
 
 
 def _build_prompt(route_result: dict, profile: str) -> str:
-    stations = route_result.get("route", route_result.get("stations", []))
     return (
-        "Explain this already-computed Kochi Metro route without changing it. "
-        f"Profile: {profile}. Stations: {stations}. "
-        f"Suggested alternate: {route_result.get('suggested_alternate')}. "
-        f"Elevator details: {route_result.get('elevator_details', [])}. "
-        "For visually_impaired, use clean short text-to-speech sentences. "
-        "For deaf_hoh_mute, use one very short banner-length line. "
-        "For wheelchair, use one normal descriptive sentence including elevator status."
+        f"Write route guidance only for the {profile} profile. "
+        "Use only the station names, station count, suggested alternate, and elevator data "
+        "in the route data below. Do not add facts or mention any other profile. "
+        "Respond in plain text only: no Markdown, no headings, no asterisks, and no bullet lists. "
+        f"{_profile_instruction(profile)} "
+        f"Route data: {json.dumps(_route_data(route_result))}"
     )
 
 
@@ -61,6 +84,6 @@ def generate_explanation(route_result: dict, profile: str) -> str:
             model="gpt-4o-mini",
             input=_build_prompt(route_result, profile),
         )
-        return response.output_text.strip() or fallback
+        return _plain_text(response.output_text) or fallback
     except Exception:
         return fallback
