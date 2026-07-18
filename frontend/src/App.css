@@ -529,6 +529,25 @@ select {
   margin: 0;
 }
 
+.journey-tracker {
+  border-top: 1px solid var(--slate);
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 18px;
+}
+
+.journey-tracker select {
+  width: 100%;
+}
+
+.journey-update {
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 400 !important;
+  margin: 6px 0 0 !important;
+}
+
 button:focus-visible,
 select:focus-visible {
   outline: 4px solid var(--signal-amber);

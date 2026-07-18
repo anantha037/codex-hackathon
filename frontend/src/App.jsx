@@ -83,6 +83,8 @@ function App() {
   const [activeOutage, setActiveOutage] = useState(null)
   const [booking, setBooking] = useState(null)
   const [bookingStage, setBookingStage] = useState('')
+  const [currentStation, setCurrentStation] = useState('')
+  const [journeyStatus, setJourneyStatus] = useState(null)
   const [isActioning, setIsActioning] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [speechRecognitionSupported, setSpeechRecognitionSupported] = useState(true)
@@ -157,11 +159,37 @@ function App() {
       bookingTimerRef.current = window.setTimeout(() => {
         setBooking(bookingResult)
         setBookingStage('booked')
+        const initialStation = lastPlanRef.current?.start_station
+        if (initialStation) {
+          setCurrentStation(initialStation)
+          requestJourneyStatus(initialStation)
+        }
         if (profile === 'visually_impaired') {
           speakRoute(`Booking confirmed, your ticket ID is ${bookingResult.ticket_id}.`)
         }
       }, 400)
     }, 350)
+  }
+
+  async function requestJourneyStatus(station) {
+    const plan = lastPlanRef.current
+    if (!plan) return
+
+    try {
+      const parameters = new URLSearchParams({
+        start_station: plan.start_station,
+        end_station: plan.end_station,
+        current_station: station,
+        profile: plan.profile,
+      })
+      const response = await fetch(`${API_URL}/journey-status?${parameters}`)
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.detail || 'Unable to update journey status.')
+      setJourneyStatus(result)
+      if (plan.profile === 'visually_impaired') speakRoute(result.speech_text)
+    } catch (error) {
+      setErrorMessage(error.message || 'Unable to update journey status.')
+    }
   }
 
   async function bookWithVoice() {
@@ -298,6 +326,7 @@ function App() {
     setErrorMessage('')
     setIsPlanning(true)
     setBooking(null)
+    setJourneyStatus(null)
     setActiveOutage(null)
     const result = await requestRoute('/plan-route', routeRequest, profile === 'visually_impaired')
     if (result) setLastPlan(routeRequest)
@@ -510,6 +539,25 @@ function App() {
                     <>
                       <p><strong>Booked</strong></p>
                       <p className="ticket-confirmation"><strong>Ticket ID: {booking.ticket_id}</strong><br /><code>{booking.qr_payload}</code></p>
+                      <div className="journey-tracker">
+                        <label htmlFor="current-station">I&apos;m at...</label>
+                        <select
+                          id="current-station"
+                          value={currentStation}
+                          onChange={(event) => {
+                            setCurrentStation(event.target.value)
+                            requestJourneyStatus(event.target.value)
+                          }}
+                        >
+                          {STATIONS.map((station) => <option key={station}>{station}</option>)}
+                        </select>
+                        {journeyStatus && (
+                          <p className="journey-update">
+                            {journeyStatus.next_station && <strong>Next stop: {journeyStatus.next_station}. </strong>}
+                            {journeyStatus.message}
+                          </p>
+                        )}
+                      </div>
                     </>
                   )}
                 </div>

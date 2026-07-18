@@ -8,7 +8,12 @@ from pydantic import BaseModel
 from assistant import handle_request
 from booking import build_whatsapp_link, create_booking
 from llm import generate_explanation
-from routing import get_accessible_route, get_direct_route, set_elevator_status
+from routing import (
+    get_accessible_route,
+    get_direct_route,
+    get_journey_status,
+    set_elevator_status,
+)
 from stations import STATIONS
 
 from models import (
@@ -110,6 +115,44 @@ def replan(request: ReplanRequest):
 @app.post("/assistant", response_model=None)
 def assistant(request: AssistantRequest):
     return handle_request(request.user_text, request.profile)
+
+
+@app.get("/journey-status", response_model=None)
+def journey_status(
+    start_station: str,
+    end_station: str,
+    current_station: str,
+    profile: str,
+):
+    status = get_journey_status(start_station, end_station, current_station)
+    explanation_input = {
+        "route": [current_station, status["next_station"]]
+        if status["next_station"]
+        else [current_station],
+        "station_count": status["stations_remaining"],
+        "platform": status["platform"],
+        "elevator_details": elevator_details_for(
+            (current_station, end_station)
+        )
+        if profile == "wheelchair"
+        else [],
+    }
+    explanation = generate_explanation(explanation_input, profile)
+    response = {
+        **status,
+        "message": explanation,
+        "speech_text": "",
+        "visual_alert": "",
+        "accessible_route": status["route"] if profile == "wheelchair" else [],
+        "elevator_details": explanation_input["elevator_details"],
+    }
+    if profile == "visually_impaired":
+        response["speech_text"] = explanation
+    elif profile == "deaf_hoh_mute":
+        response["visual_alert"] = explanation
+    else:
+        response["explanation"] = explanation
+    return response
 
 
 @app.post("/book-ticket", response_model=None)

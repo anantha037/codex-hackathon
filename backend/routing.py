@@ -88,3 +88,30 @@ def get_accessible_route(start_station: str, end_station: str) -> dict:
         {"replacements": replacements} if replacements else None
     )
     return route_details
+
+
+def get_journey_status(
+    start_station: str, end_station: str, current_station: str
+) -> dict:
+    """Return deterministic progress details from the current station to the destination."""
+    start_index = _station_index(start_station)
+    end_index = _station_index(end_station)
+    current_index = _station_index(current_station)
+    journey_start = min(start_index, end_index)
+    journey_end = max(start_index, end_index)
+    if not journey_start <= current_index <= journey_end:
+        raise ValueError("Current station is outside the selected journey")
+
+    remaining_route = get_direct_route(current_station, end_station)
+    stations_remaining = max(remaining_route["station_count"] - 1, 0)
+    next_station = (
+        remaining_route["route"][1] if stations_remaining else None
+    )
+    return {
+        **remaining_route,
+        "start_station": start_station,
+        "end_station": end_station,
+        "current_station": current_station,
+        "next_station": next_station,
+        "stations_remaining": stations_remaining,
+    }
