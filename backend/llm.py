@@ -11,6 +11,7 @@ def _route_data(route_result: dict) -> dict:
     return {
         "stations": route_result.get("route", route_result.get("stations", [])),
         "station_count": route_result.get("station_count"),
+        "platform": route_result.get("platform"),
         "suggested_alternate": route_result.get("suggested_alternate"),
         "elevator_details": route_result.get("elevator_details", []),
     }
@@ -33,6 +34,7 @@ def _fallback_explanation(route_result: dict, profile: str) -> str:
     stations = data["stations"]
     route_text = " to ".join(stations) if stations else "the selected route"
     count = data["station_count"] or len(stations)
+    platform_text = f" Board from {data['platform']}." if data["platform"] else ""
     elevator_text = ", ".join(
         f"{item['station']}: {item['elevator_status']}"
         for item in data["elevator_details"]
@@ -41,13 +43,13 @@ def _fallback_explanation(route_result: dict, profile: str) -> str:
     alternate_text = _alternate_text(data["suggested_alternate"])
 
     if profile == "deaf_hoh_mute":
-        return _plain_text(f"{route_text}. {count} stations.{alternate_text}")
+        return _plain_text(f"{route_text}. {count} stations.{platform_text}{alternate_text}")
     if profile == "wheelchair":
         return _plain_text(
             f"Wheelchair route: {route_text}. Elevator status: "
-            f"{elevator_text or 'not provided'}.{alternate_text}"
+            f"{elevator_text or 'not provided'}.{platform_text}{alternate_text}"
         )
-    return _plain_text(f"Route: {route_text}. {count} stations.{alternate_text}")
+    return _plain_text(f"Route: {route_text}. {count} stations.{platform_text}{alternate_text}")
 
 
 def _profile_instruction(profile: str) -> str:
@@ -63,7 +65,7 @@ def _profile_instruction(profile: str) -> str:
 def _build_prompt(route_result: dict, profile: str) -> str:
     return (
         f"Write route guidance only for the {profile} profile. "
-        "Use only the station names, station count, suggested alternate, and elevator data "
+        "Use only the station names, station count, platform, suggested alternate, and elevator data "
         "in the route data below. Do not add facts or mention any other profile. "
         "Respond in plain text only: no Markdown, no headings, no asterisks, and no bullet lists. "
         f"{_profile_instruction(profile)} "

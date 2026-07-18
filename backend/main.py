@@ -61,7 +61,8 @@ def route_for_profile(start_station: str, end_station: str, profile: str) -> dic
         route_details["accessible_route"] = []
         route_details["elevator_details"] = []
 
-    explanation = generate_explanation(route_details, profile)
+    explanation_input = {**route_details, "platform": route_details["platform"]}
+    explanation = generate_explanation(explanation_input, profile)
     route_details["speech_text"] = ""
     route_details["visual_alert"] = ""
     if profile == "visually_impaired":

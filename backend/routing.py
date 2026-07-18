@@ -44,12 +44,20 @@ def get_direct_route(start_station: str, end_station: str) -> dict:
 
     if start_index < end_index:
         direction = "down"
+        platform = "Platform 1 — towards Thripunithura"
     elif start_index > end_index:
         direction = "up"
+        platform = "Platform 2 — towards Aluva"
     else:
         direction = "same station"
+        platform = "No platform required"
 
-    return {"route": route, "direction": direction, "station_count": len(route)}
+    return {
+        "route": route,
+        "direction": direction,
+        "platform": platform,
+        "station_count": len(route),
+    }
 
 
 def get_accessible_route(start_station: str, end_station: str) -> dict:
