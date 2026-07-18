@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 const API_URL = 'http://localhost:8000'
+const CONNECTION_ISSUE = 'Connection issue — tap to try again'
 const STATIONS = [
   'Aluva', 'Pulinchodu', 'Companypady', 'Ambattukavu', 'Muttom',
   'Kalamassery', 'Cochin University', 'Pathadipalam', 'Edappally',
@@ -100,6 +101,9 @@ function App() {
   const [isListening, setIsListening] = useState(false)
   const [speechRecognitionSupported, setSpeechRecognitionSupported] = useState(true)
   const [voiceStatus, setVoiceStatus] = useState('')
+  const [isConnecting, setIsConnecting] = useState(false)
+  const [connectionIssue, setConnectionIssue] = useState(false)
+  const [retryAction, setRetryAction] = useState(null)
   const recognitionRef = useRef(null)
   const restartTimerRef = useRef(null)
   const lastPlanRef = useRef(null)
@@ -202,6 +206,36 @@ function App() {
     })
   }
 
+  async function fetchWithTimeout(url, options = {}) {
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 8000)
+    setIsConnecting(true)
+
+    try {
+      return await fetch(url, { ...options, signal: controller.signal })
+    } catch (error) {
+      if (error.name === 'AbortError' || error instanceof TypeError) {
+        throw new Error(CONNECTION_ISSUE)
+      }
+      throw error
+    } finally {
+      window.clearTimeout(timeout)
+      setIsConnecting(false)
+    }
+  }
+
+  function showConnectionIssue(retry) {
+    setConnectionIssue(true)
+    setRetryAction(() => retry)
+    setErrorMessage('')
+    if (profile === 'visually_impaired') speakRoute(CONNECTION_ISSUE)
+  }
+
+  function clearConnectionIssue() {
+    setConnectionIssue(false)
+    setRetryAction(null)
+  }
+
   function startBookingProcess() {
     window.clearTimeout(bookingTimerRef.current)
     setBooking(null)
@@ -238,7 +272,7 @@ function App() {
         current_station: station,
         profile: plan.profile,
       })
-      const response = await fetch(`${API_URL}/journey-status?${parameters}`)
+      const response = await fetchWithTimeout(`${API_URL}/journey-status?${parameters}`)
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Unable to update journey status.')
       setJourneyStatus(result)
@@ -257,6 +291,10 @@ function App() {
         }
       }
     } catch (error) {
+      if (error.message === CONNECTION_ISSUE) {
+        showConnectionIssue(() => requestJourneyStatus(station))
+        return
+      }
       setErrorMessage(error.message || 'Unable to update journey status.')
     }
   }
@@ -268,7 +306,7 @@ function App() {
     try {
       const date = new Date().toISOString().slice(0, 10)
       startBookingProcess()
-      const bookingResponse = await fetch(`${API_URL}/book-ticket`, {
+      const bookingResponse = await fetchWithTimeout(`${API_URL}/book-ticket`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...plan, date }),
@@ -282,10 +320,15 @@ function App() {
         end_station: plan.end_station,
         date,
       })
-      const linkResponse = await fetch(`${API_URL}/whatsapp-booking-link?${parameters}`)
+      const linkResponse = await fetchWithTimeout(`${API_URL}/whatsapp-booking-link?${parameters}`)
       const linkResult = await linkResponse.json()
       if (linkResponse.ok) window.open(linkResult.whatsapp_link, '_blank', 'noopener,noreferrer')
     } catch (error) {
+      if (error.message === CONNECTION_ISSUE) {
+        showConnectionIssue(bookWithVoice)
+        setBookingStage('')
+        return
+      }
       setErrorMessage(error.message || 'Unable to create a ticket.')
       setBookingStage('')
       speakRoute('Sorry, I could not create your ticket.')
@@ -364,7 +407,7 @@ function App() {
 
   async function requestRoute(endpoint, routeRequest, listenForCommands = false) {
     try {
-      const response = await fetch(`${API_URL}${endpoint}`, {
+      const response = await fetchWithTimeout(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(routeRequest),
@@ -379,6 +422,10 @@ function App() {
       }
       return result
     } catch (error) {
+      if (error.message === CONNECTION_ISSUE) {
+        showConnectionIssue(() => requestRoute(endpoint, routeRequest, listenForCommands))
+        return null
+      }
       setErrorMessage(error.message || 'Unable to reach the route planning service.')
       return null
     }
@@ -393,6 +440,7 @@ function App() {
     }
     console.log('Route plan selected:', routeRequest)
     setErrorMessage('')
+    clearConnectionIssue()
     setIsPlanning(true)
     setBooking(null)
     setJourneyStatus(null)
@@ -407,7 +455,7 @@ function App() {
     setErrorMessage('')
     setIsActioning(true)
     try {
-      const outageResponse = await fetch(`${API_URL}/simulate-outage`, {
+      const outageResponse = await fetchWithTimeout(`${API_URL}/simulate-outage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ station_name: outageStation }),
@@ -418,6 +466,10 @@ function App() {
       setActiveOutage(outageResult.name)
       await requestRoute('/replan', lastPlan)
     } catch (error) {
+      if (error.message === CONNECTION_ISSUE) {
+        showConnectionIssue(handleOutage)
+        return
+      }
       setErrorMessage(error.message || 'Unable to simulate outage.')
     } finally {
       setIsActioning(false)
@@ -427,10 +479,11 @@ function App() {
   async function handleBooking() {
     if (!lastPlan) return
     setErrorMessage('')
+    clearConnectionIssue()
     setIsActioning(true)
     startBookingProcess()
     try {
-      const response = await fetch(`${API_URL}/book-ticket`, {
+      const response = await fetchWithTimeout(`${API_URL}/book-ticket`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -443,6 +496,11 @@ function App() {
       if (!response.ok) throw new Error(result.detail || 'Unable to create a ticket.')
       revealBooking(result)
     } catch (error) {
+      if (error.message === CONNECTION_ISSUE) {
+        showConnectionIssue(handleBooking)
+        setBookingStage('')
+        return
+      }
       setErrorMessage(error.message || 'Unable to create a ticket.')
       setBookingStage('')
     } finally {
@@ -460,11 +518,15 @@ function App() {
         end_station: lastPlan.end_station,
         date: new Date().toISOString().slice(0, 10),
       })
-      const response = await fetch(`${API_URL}/whatsapp-booking-link?${parameters}`)
+      const response = await fetchWithTimeout(`${API_URL}/whatsapp-booking-link?${parameters}`)
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Unable to prepare the WhatsApp link.')
       window.open(result.whatsapp_link, '_blank', 'noopener,noreferrer')
     } catch (error) {
+      if (error.message === CONNECTION_ISSUE) {
+        showConnectionIssue(handleWhatsApp)
+        return
+      }
       setErrorMessage(error.message || 'Unable to prepare the WhatsApp link.')
     } finally {
       setIsActioning(false)
@@ -518,9 +580,11 @@ function App() {
       {isDeaf && (
         <aside className={`alert-banner ${alertBannerPulse ? 'is-pulsing' : ''}`} role="status">
           <strong>Service alerts</strong>
-          <span>{journeyStatus?.visual_alert || routeResult?.visual_alert || 'No active alerts. Live disruptions will appear here.'}</span>
+          <span>{connectionIssue ? CONNECTION_ISSUE : journeyStatus?.visual_alert || routeResult?.visual_alert || 'No active alerts. Live disruptions will appear here.'}</span>
         </aside>
       )}
+
+      {isConnecting && <p className="connecting-status" aria-live="polite">Connecting...</p>}
 
       <section className="route-workspace" aria-labelledby="route-heading">
         <div className="route-intro">
@@ -556,13 +620,29 @@ function App() {
               {STATIONS.map((station) => <option key={station}>{station}</option>)}
             </select>
           </div>
-          <button className="primary-button" disabled={isPlanning} type="submit">
-            {isPlanning ? 'Planning…' : 'Plan Route'} <span aria-hidden="true">→</span>
+          <button className="primary-button" disabled={isPlanning || isConnecting} type="submit">
+            {isPlanning || isConnecting ? 'Connecting...' : 'Plan Route'} <span aria-hidden="true">→</span>
           </button>
         </form>
       </section>
 
-      {errorMessage && <p className="error-message" role="alert">{errorMessage}</p>}
+      {connectionIssue && (
+        <div className="connection-issue" role="alert">
+          <p>{CONNECTION_ISSUE}</p>
+          <button
+            className="outline-button"
+            onClick={() => {
+              const retry = retryAction
+              clearConnectionIssue()
+              retry?.()
+            }}
+            type="button"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+      {errorMessage && !connectionIssue && <p className="error-message" role="alert">{errorMessage}</p>}
 
       {routeResult && (
         <>

@@ -170,6 +170,12 @@ h2 {
   font-weight: 800;
 }
 
+.connecting-status {
+  color: var(--metro-teal);
+  font-weight: 800;
+  margin: 16px 0 0;
+}
+
 .alert-banner.is-pulsing {
   animation: alert-pulse 600ms ease-in-out 1;
 }
@@ -446,6 +452,24 @@ select {
   border-color: var(--signal-amber);
   color: var(--ink);
   font-weight: 700;
+}
+
+.connection-issue {
+  align-items: center;
+  background: #fff3da;
+  border-left: 6px solid var(--signal-amber);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: space-between;
+  margin: 34px 0 0;
+  max-width: 760px;
+  padding: 18px 22px;
+}
+
+.connection-issue p {
+  font-weight: 800;
+  margin: 0;
 }
 
 .route-result {
