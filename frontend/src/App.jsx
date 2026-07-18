@@ -184,13 +184,34 @@ function App() {
 
     const recognition = new Recognition()
     recognition.continuous = false
-    recognition.interimResults = false
+    recognition.interimResults = true
     recognition.lang = 'en-IN'
     profileRecognitionRef.current = recognition
     setIsProfileListening(true)
     setProfileVoiceMessage('Listening... Say a profile name to continue.')
+    let handledFinalResult = false
+    recognition.onstart = () => console.log('Recognition started')
+    recognition.onaudiostart = () => console.log('Audio capture started')
+    recognition.onspeechstart = () => console.log('Speech detected')
     recognition.onresult = (event) => {
-      const selectedProfile = profileFromTranscript(event.results[0][0].transcript)
+      const transcripts = []
+      let finalTranscript = ''
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index]
+        const alternative = result[0]
+        console.log('Recognition result', {
+          transcript: alternative.transcript,
+          confidence: alternative.confidence,
+          isFinal: result.isFinal,
+        })
+        transcripts.push(alternative.transcript)
+        if (result.isFinal) finalTranscript += alternative.transcript
+      }
+      setProfileVoiceMessage(`Heard: ${transcripts.join(' ').trim()}`)
+      if (!finalTranscript || handledFinalResult) return
+
+      handledFinalResult = true
+      const selectedProfile = profileFromTranscript(finalTranscript)
       setIsProfileListening(false)
       if (selectedProfile) {
         setProfile(selectedProfile)
@@ -198,11 +219,15 @@ function App() {
         setProfileVoiceMessage('I did not recognise a profile. Choose a button below.')
       }
     }
-    recognition.onerror = () => {
+    recognition.onerror = (error) => {
+      console.error('Recognition error:', error.error, error.message)
       setIsProfileListening(false)
       setProfileVoiceMessage('Voice profile selection is unavailable. Choose an option below.')
     }
-    recognition.onend = () => setIsProfileListening(false)
+    recognition.onend = () => {
+      console.log('Recognition ended')
+      setIsProfileListening(false)
+    }
     try {
       recognition.start()
     } catch {
@@ -398,16 +423,36 @@ function App() {
     recognitionRef.current?.abort()
     const recognition = new Recognition()
     recognition.continuous = false
-    recognition.interimResults = false
+    recognition.interimResults = true
     recognition.lang = 'en-IN'
     recognitionRef.current = recognition
     setIsListening(true)
     setVoiceStatus(mode === 'journey' ? 'Listening for your journey…' : 'Listening for “book it” or “repeat”…')
 
+    let handledFinalResult = false
+    recognition.onstart = () => console.log('Recognition started')
+    recognition.onaudiostart = () => console.log('Audio capture started')
+    recognition.onspeechstart = () => console.log('Speech detected')
     recognition.onresult = async (event) => {
-      const transcript = event.results[0][0].transcript
+      const transcripts = []
+      let finalTranscript = ''
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index]
+        const alternative = result[0]
+        console.log('Recognition result', {
+          transcript: alternative.transcript,
+          confidence: alternative.confidence,
+          isFinal: result.isFinal,
+        })
+        transcripts.push(alternative.transcript)
+        if (result.isFinal) finalTranscript += alternative.transcript
+      }
+      setVoiceStatus(`Heard: ${transcripts.join(' ').trim()}`)
+      if (!finalTranscript || handledFinalResult) return
+
+      handledFinalResult = true
+      const transcript = finalTranscript
       setIsListening(false)
-      setVoiceStatus(`Heard: ${transcript}`)
 
       if (mode === 'command') {
         const command = transcript.toLowerCase()
@@ -457,6 +502,7 @@ function App() {
       setIsPlanning(false)
     }
     recognition.onerror = (event) => {
+      console.error('Recognition error:', event.error, event.message)
       setIsListening(false)
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         setVoiceStatus('Microphone access is unavailable. Use the station dropdowns below.')
@@ -464,7 +510,10 @@ function App() {
       }
       retryListening(mode, "Sorry, I didn't catch that. Try again.")
     }
-    recognition.onend = () => setIsListening(false)
+    recognition.onend = () => {
+      console.log('Recognition ended')
+      setIsListening(false)
+    }
     try {
       recognition.start()
     } catch {
