@@ -170,6 +170,14 @@ h2 {
   font-weight: 800;
 }
 
+.alert-sent {
+  color: var(--signal-amber);
+  font-size: 0.82rem;
+  font-weight: 800;
+  margin-left: auto;
+  text-transform: uppercase;
+}
+
 .connecting-status {
   color: var(--metro-teal);
   font-weight: 800;
@@ -713,6 +721,10 @@ select:focus-visible {
     align-items: flex-start;
     flex-direction: column;
     gap: 5px;
+  }
+
+  .alert-sent {
+    margin-left: 0;
   }
 
   .secondary-actions {

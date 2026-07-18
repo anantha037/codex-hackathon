@@ -121,6 +121,7 @@ function App() {
   const [currentStation, setCurrentStation] = useState('')
   const [journeyStatus, setJourneyStatus] = useState(null)
   const [alertBannerPulse, setAlertBannerPulse] = useState(false)
+  const [alertSent, setAlertSent] = useState(false)
   const [isActioning, setIsActioning] = useState(false)
   const [isProfileListening, setIsProfileListening] = useState(false)
   const [profileVoiceMessage, setProfileVoiceMessage] = useState('')
@@ -137,6 +138,7 @@ function App() {
   const bookingTimerRef = useRef(null)
   const profileRecognitionRef = useRef(null)
   const alertPulseTimerRef = useRef(null)
+  const alertSentTimerRef = useRef(null)
   const qrCanvasRef = useRef(null)
   const journeyStations = lastPlan
     ? stationsInJourney(lastPlan.start_station, lastPlan.end_station)
@@ -149,6 +151,7 @@ function App() {
     window.clearTimeout(restartTimerRef.current)
     window.clearTimeout(bookingTimerRef.current)
     window.clearTimeout(alertPulseTimerRef.current)
+    window.clearTimeout(alertSentTimerRef.current)
   }, [])
 
   useEffect(() => {
@@ -352,7 +355,20 @@ function App() {
       if (!response.ok) throw new Error(result.detail || 'Unable to update journey status.')
       setJourneyStatus(result)
       if (plan.profile === 'deaf_hoh_mute') {
-        navigator.vibrate?.([200, 100, 200])
+        const vibrationPattern = [200, 100, 200]
+        const vibrationSupported = typeof navigator.vibrate === 'function'
+        console.log(vibrationSupported ? 'Vibration API supported' : 'Vibration API not supported on this device')
+        if (vibrationSupported) {
+          try {
+            console.log('Vibration called with pattern', vibrationPattern)
+            navigator.vibrate(vibrationPattern)
+          } catch (vibrationError) {
+            console.error('Vibration call failed:', vibrationError)
+          }
+        }
+        setAlertSent(true)
+        window.clearTimeout(alertSentTimerRef.current)
+        alertSentTimerRef.current = window.setTimeout(() => setAlertSent(false), 900)
         setAlertBannerPulse(true)
         window.clearTimeout(alertPulseTimerRef.current)
         alertPulseTimerRef.current = window.setTimeout(() => setAlertBannerPulse(false), 600)
@@ -698,6 +714,7 @@ function App() {
         <aside className={`alert-banner ${alertBannerPulse ? 'is-pulsing' : ''}`} role="status">
           <strong>Service alerts</strong>
           <span>{connectionIssue ? CONNECTION_ISSUE : journeyStatus?.visual_alert || routeResult?.visual_alert || 'No active alerts. Live disruptions will appear here.'}</span>
+          {alertSent && <span className="alert-sent">Alert sent</span>}
         </aside>
       )}
 
