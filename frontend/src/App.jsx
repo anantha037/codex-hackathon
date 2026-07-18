@@ -21,7 +21,7 @@ function alternateStation(routeResult) {
   return routeResult?.suggested_alternate?.replacements?.[0]?.alternate_station
 }
 
-function MetroLineDiagram({ startStation, endStation, showElevators = false, alternate }) {
+function MetroLineDiagram({ startStation, endStation, showElevators = false, alternate, outageStation }) {
   const startIndex = STATIONS.indexOf(startStation)
   const endIndex = STATIONS.indexOf(endStation)
   const routeStart = Math.min(startIndex, endIndex)
@@ -35,11 +35,13 @@ function MetroLineDiagram({ startStation, endStation, showElevators = false, alt
             const isEndpoint = station === startStation || station === endStation
             const isInRoute = index >= routeStart && index <= routeEnd
             const isAlternate = station === alternate
+            const isOutage = station === outageStation
             const classes = [
               'diagram-station',
               isInRoute && 'in-route',
               isEndpoint && 'route-endpoint',
               isAlternate && 'alternate-station',
+              isOutage && 'outage-station',
             ].filter(Boolean).join(' ')
 
             return (
@@ -49,6 +51,7 @@ function MetroLineDiagram({ startStation, endStation, showElevators = false, alt
                 <span className="station-name">{station}</span>
                 <span className="station-code">KM{String(index + 1).padStart(2, '0')}</span>
                 {isAlternate && <span className="alternate-label">Accessible alternative</span>}
+                {isOutage && <span className="outage-label">Elevator outage</span>}
               </li>
             )
           })}
@@ -66,6 +69,11 @@ function App() {
   const [isPlanning, setIsPlanning] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const [lastPlan, setLastPlan] = useState(null)
+  const [outageStation, setOutageStation] = useState(STATIONS[0])
+  const [activeOutage, setActiveOutage] = useState(null)
+  const [booking, setBooking] = useState(null)
+  const [isActioning, setIsActioning] = useState(false)
 
   useEffect(() => () => window.speechSynthesis?.cancel(), [])
 
@@ -80,36 +88,106 @@ function App() {
     window.speechSynthesis.speak(utterance)
   }
 
-  async function handlePlanRoute(event) {
-    event.preventDefault()
-    console.log('Route plan selected:', {
-      profile,
-      start_station: startStation,
-      end_station: endStation,
-    })
-    setErrorMessage('')
-    setIsPlanning(true)
-
+  async function requestRoute(endpoint, routeRequest) {
     try {
-      const response = await fetch(`${API_URL}/plan-route`, {
+      const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          start_station: startStation,
-          end_station: endStation,
-          profile,
-        }),
+        body: JSON.stringify(routeRequest),
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Unable to plan this route.')
 
       setRouteResult(result)
-      if (profile === 'visually_impaired') speakRoute(result.speech_text)
+      if (routeRequest.profile === 'visually_impaired') speakRoute(result.speech_text)
+      return result
     } catch (error) {
-      setRouteResult(null)
       setErrorMessage(error.message || 'Unable to reach the route planning service.')
+      return null
+    }
+  }
+
+  async function handlePlanRoute(event) {
+    event.preventDefault()
+    const routeRequest = {
+      profile,
+      start_station: startStation,
+      end_station: endStation,
+    }
+    console.log('Route plan selected:', routeRequest)
+    setErrorMessage('')
+    setIsPlanning(true)
+    setBooking(null)
+    setActiveOutage(null)
+    const result = await requestRoute('/plan-route', routeRequest)
+    if (result) setLastPlan(routeRequest)
+    setIsPlanning(false)
+  }
+
+  async function handleOutage() {
+    if (!lastPlan) return
+    setErrorMessage('')
+    setIsActioning(true)
+    try {
+      const outageResponse = await fetch(`${API_URL}/simulate-outage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ station_name: outageStation }),
+      })
+      const outageResult = await outageResponse.json()
+      if (!outageResponse.ok) throw new Error(outageResult.detail || 'Unable to simulate outage.')
+
+      setActiveOutage(outageResult.name)
+      await requestRoute('/replan', lastPlan)
+    } catch (error) {
+      setErrorMessage(error.message || 'Unable to simulate outage.')
     } finally {
-      setIsPlanning(false)
+      setIsActioning(false)
+    }
+  }
+
+  async function handleBooking() {
+    if (!lastPlan) return
+    setErrorMessage('')
+    setIsActioning(true)
+    try {
+      const response = await fetch(`${API_URL}/book-ticket`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          start_station: lastPlan.start_station,
+          end_station: lastPlan.end_station,
+          date: new Date().toISOString().slice(0, 10),
+        }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.detail || 'Unable to create a ticket.')
+      setBooking(result)
+    } catch (error) {
+      setErrorMessage(error.message || 'Unable to create a ticket.')
+    } finally {
+      setIsActioning(false)
+    }
+  }
+
+  async function handleWhatsApp() {
+    if (!lastPlan) return
+    setErrorMessage('')
+    setIsActioning(true)
+    try {
+      const parameters = new URLSearchParams({
+        start_station: lastPlan.start_station,
+        end_station: lastPlan.end_station,
+        date: new Date().toISOString().slice(0, 10),
+      })
+      const response = await fetch(`${API_URL}/whatsapp-booking-link?${parameters}`)
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.detail || 'Unable to prepare the WhatsApp link.')
+      window.open(result.whatsapp_link, '_blank', 'noopener,noreferrer')
+    } catch (error) {
+      setErrorMessage(error.message || 'Unable to prepare the WhatsApp link.')
+    } finally {
+      setIsActioning(false)
     }
   }
 
@@ -190,22 +268,48 @@ function App() {
       {errorMessage && <p className="error-message" role="alert">{errorMessage}</p>}
 
       {routeResult && (
-        <section className="route-result" aria-live="polite" aria-labelledby="result-heading">
-          <p className="eyebrow">Route ready</p>
-          <h2 id="result-heading">{routeResult.station_count} stations · {routeResult.direction}</h2>
-          {isVisuallyImpaired && <p>{routeResult.speech_text}</p>}
-          {isDeaf && <p>{routeResult.visual_alert}</p>}
-          {isWheelchair && (
-            <>
-              <p>{routeResult.explanation}</p>
-              <ul className="elevator-details">
-                {routeResult.elevator_details?.map((station) => (
-                  <li key={station.station}>{station.station}: <strong>{station.elevator_status}</strong></li>
-                ))}
-              </ul>
-            </>
-          )}
-        </section>
+        <>
+          <section className="route-result" aria-live="polite" aria-labelledby="result-heading">
+            <p className="eyebrow">Route ready</p>
+            <h2 id="result-heading">{routeResult.station_count} stations · {routeResult.direction}</h2>
+            {isVisuallyImpaired && <p>{routeResult.speech_text}</p>}
+            {isDeaf && <p>{routeResult.visual_alert}</p>}
+            {isWheelchair && (
+              <>
+                <p>{routeResult.explanation}</p>
+                <ul className="elevator-details">
+                  {routeResult.elevator_details?.map((station) => (
+                    <li key={station.station}>{station.station}: <strong>{station.elevator_status}</strong></li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
+
+          <section className="secondary-actions" aria-label="Route actions">
+            <div className="demo-area">
+              <p className="eyebrow">Demo / admin controls</p>
+              <h2>Simulate elevator outage</h2>
+              <label htmlFor="outage-station">Station with outage</label>
+              <div className="action-row">
+                <select id="outage-station" value={outageStation} onChange={(event) => setOutageStation(event.target.value)}>
+                  {STATIONS.map((station) => <option key={station}>{station}</option>)}
+                </select>
+                <button className="outline-button" disabled={isActioning} onClick={handleOutage} type="button">Simulate Outage</button>
+              </div>
+            </div>
+
+            <div className="booking-area">
+              <p className="eyebrow">Ticket options</p>
+              <h2>Ready to travel?</h2>
+              <div className="action-row">
+                <button className="outline-button" disabled={isActioning} onClick={handleBooking} type="button">Book Ticket</button>
+                <button className="text-action" disabled={isActioning} onClick={handleWhatsApp} type="button">Pay via WhatsApp ↗</button>
+              </div>
+              {booking && <p className="ticket-confirmation"><strong>Confirmed: {booking.ticket_id}</strong><br /><code>{booking.qr_payload}</code></p>}
+            </div>
+          </section>
+        </>
       )}
 
       <section className="diagram-section" aria-labelledby="diagram-heading">
@@ -219,6 +323,7 @@ function App() {
         <MetroLineDiagram
           alternate={alternateStation(routeResult)}
           endStation={diagramEnd}
+          outageStation={activeOutage}
           showElevators={isWheelchair}
           startStation={diagramStart}
         />

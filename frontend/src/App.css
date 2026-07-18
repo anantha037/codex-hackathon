@@ -350,6 +350,19 @@ select {
   margin-top: 5px;
 }
 
+.diagram-station.outage-station .station-dot {
+  background: var(--signal-amber);
+  border-color: var(--ink);
+}
+
+.outage-label {
+  color: var(--ink);
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 800;
+  margin-top: 5px;
+}
+
 .error-message,
 .route-result {
   border-left: 6px solid var(--metro-teal);
@@ -379,6 +392,92 @@ select {
   list-style: none;
   margin: 16px 0 0;
   padding: 0;
+}
+
+.secondary-actions {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 24px;
+}
+
+.demo-area,
+.booking-area {
+  border: 2px solid var(--ink);
+  padding: 22px;
+}
+
+.demo-area {
+  border-color: var(--signal-amber);
+}
+
+.secondary-actions h2 {
+  font-size: 1.2rem;
+  margin-bottom: 18px;
+}
+
+.secondary-actions label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.action-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.action-row select {
+  flex: 1 1 180px;
+}
+
+.outline-button,
+.text-action {
+  cursor: pointer;
+  min-height: 48px;
+}
+
+.outline-button {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  color: var(--ink);
+  font-weight: 800;
+  padding: 10px 14px;
+}
+
+.outline-button:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.text-action {
+  background: none;
+  border: 0;
+  color: var(--metro-teal);
+  font-weight: 800;
+  padding: 10px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.outline-button:disabled,
+.text-action:disabled {
+  color: var(--slate);
+  cursor: wait;
+}
+
+.ticket-confirmation {
+  background: var(--paper);
+  border-left: 5px solid var(--metro-teal);
+  margin: 18px 0 0;
+  overflow-wrap: anywhere;
+  padding: 12px;
+}
+
+.ticket-confirmation code {
+  color: var(--slate);
+  font-size: 0.76rem;
 }
 
 button:focus-visible,
@@ -439,6 +538,10 @@ select:focus-visible {
     align-items: flex-start;
     flex-direction: column;
     gap: 5px;
+  }
+
+  .secondary-actions {
+    grid-template-columns: 1fr;
   }
 
   .diagram-heading {
