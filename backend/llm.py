@@ -14,6 +14,7 @@ def _route_data(route_result: dict) -> dict:
         "platform": route_result.get("platform"),
         "suggested_alternate": route_result.get("suggested_alternate"),
         "elevator_details": route_result.get("elevator_details", []),
+        "boarding_assistance": route_result.get("boarding_assistance", []),
     }
 
 
@@ -41,13 +42,23 @@ def _fallback_explanation(route_result: dict, profile: str) -> str:
         if "station" in item and "elevator_status" in item
     )
     alternate_text = _alternate_text(data["suggested_alternate"])
+    assisted_stations = ", ".join(
+        item["station"]
+        for item in data["boarding_assistance"]
+        if item.get("boarding_assistance")
+    )
+    assistance_text = (
+        f" Staff-assisted boarding is available at {assisted_stations}."
+        if assisted_stations
+        else ""
+    )
 
     if profile == "deaf_hoh_mute":
         return _plain_text(f"{route_text}. {count} stations.{platform_text}{alternate_text}")
     if profile == "wheelchair":
         return _plain_text(
             f"Wheelchair route: {route_text}. Elevator status: "
-            f"{elevator_text or 'not provided'}.{platform_text}{alternate_text}"
+            f"{elevator_text or 'not provided'}.{platform_text}{assistance_text}{alternate_text}"
         )
     return _plain_text(f"Route: {route_text}. {count} stations.{platform_text}{alternate_text}")
 
@@ -58,14 +69,14 @@ def _profile_instruction(profile: str) -> str:
     if profile == "deaf_hoh_mute":
         return "Write one or two short, high-clarity sentences suitable for a visual alert."
     if profile == "wheelchair":
-        return "Write one or two short descriptive sentences and include any provided elevator status."
+        return "Write one or two short descriptive sentences, including elevator status and staff-assisted boarding only when its returned value is true."
     return "Write one or two short plain-language sentences."
 
 
 def _build_prompt(route_result: dict, profile: str) -> str:
     return (
         f"Write route guidance only for the {profile} profile. "
-        "Use only the station names, station count, platform, suggested alternate, and elevator data "
+        "Use only the station names, station count, platform, suggested alternate, elevator data, and boarding-assistance data "
         "in the route data below. Do not add facts or mention any other profile. "
         "Respond in plain text only: no Markdown, no headings, no asterisks, and no bullet lists. "
         f"{_profile_instruction(profile)} "

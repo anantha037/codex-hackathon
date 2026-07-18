@@ -55,6 +55,7 @@ def elevator_details_for(station_names: tuple[str, str]) -> list[dict]:
             "station": station["name"],
             "has_elevator": station["has_elevator"],
             "elevator_status": station["elevator_status"],
+            "boarding_assistance": station["boarding_assistance"],
         }
         for station in STATIONS
         if station["name"] in requested_names
@@ -72,6 +73,10 @@ def route_for_profile(start_station: str, end_station: str, profile: str) -> dic
         route_details = get_direct_route(start_station, end_station)
         route_details["accessible_route"] = []
         route_details["elevator_details"] = []
+
+    route_details["boarding_assistance"] = elevator_details_for(
+        (start_station, end_station)
+    )
 
     explanation_input = {**route_details, "platform": route_details["platform"]}
     explanation = generate_explanation(explanation_input, profile)
