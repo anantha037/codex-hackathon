@@ -55,7 +55,6 @@ function MetroLineDiagram({
   alternate,
   outageStation,
   autoScroll = false,
-  scrollKey,
 }) {
   const startIndex = STATIONS.indexOf(startStation)
   const endIndex = STATIONS.indexOf(endStation)
@@ -67,7 +66,7 @@ function MetroLineDiagram({
     if (autoScroll && startIndex >= 0) {
       scrollRef.current?.scrollTo({ left: startIndex * 128, behavior: 'auto' })
     }
-  }, [autoScroll, startIndex, scrollKey])
+  }, [autoScroll, startIndex])
 
   return (
     <section className="line-diagram" aria-label="Kochi Metro Aluva to Thripunithura line">
@@ -806,7 +805,6 @@ function App() {
           endStation={diagramEnd}
           outageStation={activeOutage}
           showElevators={isWheelchair}
-          scrollKey={routeResult}
           startStation={diagramStart}
         />
       </section>
