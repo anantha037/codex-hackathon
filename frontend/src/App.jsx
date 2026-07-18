@@ -268,12 +268,15 @@ function App() {
         setBooking(bookingResult)
         setBookingStage('booked')
         const initialStation = lastPlanRef.current?.start_station
-        if (initialStation) {
+        const updateInitialJourneyStatus = () => {
+          if (!initialStation) return
           setCurrentStation(initialStation)
           requestJourneyStatus(initialStation)
         }
         if (profile === 'visually_impaired') {
-          speakRoute(`Booking confirmed, your ticket ID is ${bookingResult.ticket_id}.`)
+          speakRoute(`Booking confirmed, your ticket ID is ${bookingResult.ticket_id}.`, updateInitialJourneyStatus)
+        } else {
+          updateInitialJourneyStatus()
         }
       }, 400)
     }, 350)
@@ -303,9 +306,12 @@ function App() {
       if (plan.profile === 'visually_impaired') {
         if (result.next_station) {
           const nextAfterThat = result.route?.[2] || 'your destination'
-          speakRoute(`Approaching ${result.next_station}. Next stop after that: ${nextAfterThat}.`)
+          speakRoute(
+            `Approaching ${result.next_station}. Next stop after that: ${nextAfterThat}.`,
+            () => startListening('command'),
+          )
         } else {
-          speakRoute('You have reached your destination.')
+          speakRoute('You have reached your destination.', () => startListening('command'))
         }
       }
     } catch (error) {
@@ -384,7 +390,16 @@ function App() {
           speakRoute(lastExplanationRef.current, () => startListening('command'))
           return
         }
-        retryListening('command', 'Say book it or repeat.')
+        const spokenStations = stationsInTranscript(transcript)
+        const isCurrentStationUpdate = command.includes("i'm at") || command.includes('i am at') || spokenStations.length === 1
+        if (bookingStage === 'booked' && journeyStatus && isCurrentStationUpdate && spokenStations.length) {
+          const currentStationUpdate = spokenStations[0]
+          setCurrentStation(currentStationUpdate)
+          setVoiceStatus(`Updating location: ${currentStationUpdate}`)
+          await requestJourneyStatus(currentStationUpdate)
+          return
+        }
+        retryListening('command', 'Say book it, repeat, or tell me which station you are at.')
         return
       }
 
