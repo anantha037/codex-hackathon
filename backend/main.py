@@ -4,6 +4,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from routing import get_accessible_route, get_direct_route
+from stations import STATIONS
+
 from models import (
     BookTicketRequest,
     BookTicketResponse,
@@ -31,9 +34,37 @@ def not_implemented_response() -> JSONResponse:
     return JSONResponse(status_code=501, content=PlanRouteResponse().model_dump())
 
 
-@app.post("/plan-route", response_model=PlanRouteResponse)
-def plan_route(_: PlanRouteRequest):
-    return not_implemented_response()
+def elevator_details_for(station_names: tuple[str, str]) -> list[dict]:
+    requested_names = set(station_names)
+    return [
+        {
+            "station": station["name"],
+            "has_elevator": station["has_elevator"],
+            "elevator_status": station["elevator_status"],
+        }
+        for station in STATIONS
+        if station["name"] in requested_names
+    ]
+
+
+@app.post("/plan-route", response_model=None)
+def plan_route(request: PlanRouteRequest):
+    if request.profile == "wheelchair":
+        route_details = get_accessible_route(
+            request.start_station, request.end_station
+        )
+        route_details["accessible_route"] = route_details["route"]
+        route_details["elevator_details"] = elevator_details_for(
+            (request.start_station, request.end_station)
+        )
+    else:
+        route_details = get_direct_route(request.start_station, request.end_station)
+        route_details["accessible_route"] = []
+        route_details["elevator_details"] = []
+
+    route_details["speech_text"] = "Route has been planned."
+    route_details["visual_alert"] = ""
+    return route_details
 
 
 @app.post("/simulate-outage", response_model=SimulateOutageResponse)
