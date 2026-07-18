@@ -30,6 +30,14 @@ function stationsInTranscript(transcript) {
     .map((match) => match.station)
 }
 
+function profileFromTranscript(transcript) {
+  const text = transcript.toLowerCase()
+  if (text.includes('visual') || text.includes('blind')) return 'visually_impaired'
+  if (text.includes('deaf') || text.includes('mute') || text.includes('hearing')) return 'deaf_hoh_mute'
+  if (text.includes('wheelchair') || text.includes('mobility')) return 'wheelchair'
+  return null
+}
+
 function MetroLineDiagram({ startStation, endStation, showElevators = false, alternate, outageStation }) {
   const startIndex = STATIONS.indexOf(startStation)
   const endIndex = STATIONS.indexOf(endStation)
@@ -86,6 +94,8 @@ function App() {
   const [currentStation, setCurrentStation] = useState('')
   const [journeyStatus, setJourneyStatus] = useState(null)
   const [isActioning, setIsActioning] = useState(false)
+  const [isProfileListening, setIsProfileListening] = useState(false)
+  const [profileVoiceMessage, setProfileVoiceMessage] = useState('')
   const [isListening, setIsListening] = useState(false)
   const [speechRecognitionSupported, setSpeechRecognitionSupported] = useState(true)
   const [voiceStatus, setVoiceStatus] = useState('')
@@ -94,10 +104,12 @@ function App() {
   const lastPlanRef = useRef(null)
   const lastExplanationRef = useRef('')
   const bookingTimerRef = useRef(null)
+  const profileRecognitionRef = useRef(null)
 
   useEffect(() => () => {
     window.speechSynthesis?.cancel()
     recognitionRef.current?.abort()
+    profileRecognitionRef.current?.abort()
     window.clearTimeout(restartTimerRef.current)
     window.clearTimeout(bookingTimerRef.current)
   }, [])
@@ -105,6 +117,47 @@ function App() {
   useEffect(() => {
     lastPlanRef.current = lastPlan
   }, [lastPlan])
+
+  useEffect(() => {
+    if (profile) return undefined
+
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    speakRoute('Welcome to Kochi Metro Assistant. Say Visually Impaired, Deaf, or Wheelchair to continue. Or tap a button.')
+    if (!Recognition) {
+      setProfileVoiceMessage('Voice profile selection is unavailable. Choose an option below.')
+      return undefined
+    }
+
+    const recognition = new Recognition()
+    recognition.continuous = false
+    recognition.interimResults = false
+    recognition.lang = 'en-IN'
+    profileRecognitionRef.current = recognition
+    setIsProfileListening(true)
+    setProfileVoiceMessage('Listening... Say a profile name to continue.')
+    recognition.onresult = (event) => {
+      const selectedProfile = profileFromTranscript(event.results[0][0].transcript)
+      setIsProfileListening(false)
+      if (selectedProfile) {
+        setProfile(selectedProfile)
+      } else {
+        setProfileVoiceMessage('I did not recognise a profile. Choose a button below.')
+      }
+    }
+    recognition.onerror = () => {
+      setIsProfileListening(false)
+      setProfileVoiceMessage('Voice profile selection is unavailable. Choose an option below.')
+    }
+    recognition.onend = () => setIsProfileListening(false)
+    try {
+      recognition.start()
+    } catch {
+      setIsProfileListening(false)
+      setProfileVoiceMessage('Voice profile selection is unavailable. Choose an option below.')
+    }
+
+    return () => recognition.abort()
+  }, [profile])
 
   useEffect(() => {
     if (profile !== 'visually_impaired') return undefined
@@ -412,6 +465,9 @@ function App() {
         <section className="profile-choice" aria-labelledby="profile-heading">
           <p className="eyebrow">Start here</p>
           <h1 id="profile-heading">Choose the support that helps you travel with confidence.</h1>
+          <p className={`profile-listening ${isProfileListening ? 'is-listening' : ''}`} aria-live="polite">
+            <span aria-hidden="true">●</span> {profileVoiceMessage || 'Listening...'}
+          </p>
           <div className="profile-list">
             {PROFILES.map((option) => (
               <button className="profile-button" key={option.id} type="button" onClick={() => setProfile(option.id)}>

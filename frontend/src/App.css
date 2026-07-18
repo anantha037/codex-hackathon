@@ -80,6 +80,29 @@ h2 {
   margin-top: 44px;
 }
 
+.profile-listening {
+  align-items: center;
+  color: var(--slate);
+  display: flex;
+  font-size: 0.95rem;
+  font-weight: 700;
+  gap: 9px;
+  margin: 24px 0 -18px;
+}
+
+.profile-listening span {
+  color: var(--slate);
+  font-size: 1rem;
+}
+
+.profile-listening.is-listening {
+  color: var(--metro-teal);
+}
+
+.profile-listening.is-listening span {
+  color: var(--signal-amber);
+}
+
 .profile-button {
   align-items: center;
   background: var(--paper);
